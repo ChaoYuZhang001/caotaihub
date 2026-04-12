@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["hkg1"],
+  "env": {
+    "SUPABASE_URL": "https://rwbgajjrvffgvrxjcaty.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_HQaNqNyUNjo66BB3xvdrsQ_7IAQtVt3",
+    "JWT_SECRET": "caotaihub-jwt-secret-2026"
+  }
+}

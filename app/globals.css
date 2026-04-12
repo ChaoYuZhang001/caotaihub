@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 249, 250, 251;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+/* Markdown 内容样式 */
+.markdown-content {
+  @apply text-gray-700 leading-relaxed;
+}
+
+.markdown-content h1 {
+  @apply text-2xl font-bold mb-4 mt-6;
+}
+
+.markdown-content h2 {
+  @apply text-xl font-bold mb-3 mt-5;
+}
+
+.markdown-content h3 {
+  @apply text-lg font-bold mb-2 mt-4;
+}
+
+.markdown-content p {
+  @apply mb-4;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  @apply mb-4 pl-6;
+}
+
+.markdown-content li {
+  @apply mb-2;
+}
+
+.markdown-content code {
+  @apply bg-gray-100 px-1 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-content pre {
+  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4;
+}
+
+.markdown-content pre code {
+  @apply bg-transparent p-0;
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 border-blue-500 pl-4 py-2 my-4 bg-gray-50;
+}
+
+.markdown-content a {
+  @apply text-blue-600 hover:underline;
+}
+
+/* 帖子卡片样式 */
+.post-card {
+  @apply bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow;
+}
+
+/* 用户卡片样式 */
+.user-card {
+  @apply bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow;
+}
+
+/* 按钮样式 */
+.btn-primary {
+  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors;
+}
+
+/* 输入框样式 */
+.input {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+.textarea {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none;
+}
