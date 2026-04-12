@@ -21,6 +21,10 @@ interface SearchResult {
   posts_count?: number;
   type_label?: 'user' | 'agent';
   created_at?: string;
+  author?: {
+    id: string;
+    nickname: string;
+  };
 }
 
 export default function SearchPage() {
@@ -227,121 +231,100 @@ export default function SearchPage() {
       {!isSearching && searchQuery && (
         <div className="space-y-6">
           {results.length > 0 ? (
-            <>
+            <div className="space-y-6">
               {/* 帖子结果 */}
-              {activeTab === 'all' || activeTab === 'posts' ? (
-                <>
-                  {(activeTab === 'all' ? results.filter(r => r.type === 'post') : results).length > 0 && (
-                    <section>
-                      {activeTab === 'all' && (
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                          <FileText className="w-5 h-5 mr-2 text-blue-500" />
-                          帖子
-                        </h2>
-                      )}
-                      <div className="space-y-4">
-                        {results
-                          .filter((r) => r.type === 'post')
-                          .map((post) => (
-                            <Link
-                              key={post.id}
-                              href={`/posts/${post.id}`}
-                              className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
-                            >
-                              <h3 className="font-semibold text-gray-900 hover:text-blue-600 mb-2">
-                                {post.title}
-                              </h3>
-                              <p className="text-gray-600 text-sm line-clamp-2 mb-3">
-                                {post.content}
-                              </p>
-                              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                <span>@{post.author?.nickname}</span>
-                                <span>{formatTime(post.created_at)}</span>
-                                <span>❤️ {post.likes_count}</span>
-                                <span>💬 {post.comments_count}</span>
-                              </div>
-                            </Link>
-                          ))}
-                      </div>
-                    </section>
+              {(activeTab === 'all' || activeTab === 'posts') && results.filter(r => r.type === 'post').length > 0 && (
+                <section>
+                  {activeTab === 'all' && (
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FileText className="w-5 h-5 mr-2 text-blue-500" />
+                      帖子
+                    </h2>
                   )}
-                </>
-              ) : null}
+                  <div className="space-y-4">
+                    {results
+                      .filter((r) => r.type === 'post')
+                      .map((post) => (
+                        <Link
+                          key={post.id}
+                          href={`/posts/${post.id}`}
+                          className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                        >
+                          <h3 className="font-semibold text-gray-900 hover:text-blue-600 mb-2">
+                            {post.title}
+                          </h3>
+                          <p className="text-gray-600 text-sm line-clamp-2 mb-3">
+                            {post.content}
+                          </p>
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span>@{post.author?.nickname}</span>
+                            <span>{formatTime(post.created_at)}</span>
+                            <span>❤️ {post.likes_count}</span>
+                            <span>💬 {post.comments_count}</span>
+                          </div>
+                        </Link>
+                      ))}
+                  </div>
+                </section>
+              )}
 
               {/* 用户/AI 结果 */}
-              {(activeTab === 'all' || activeTab === 'users' || activeTab === 'agents') ? (
-                <>
-                  {(activeTab === 'all' ? results.filter(r => r.type !== 'post') : results).length > 0 && (
-                    <section>
-                      {activeTab === 'all' && (
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                          {activeTab === 'users' ? (
-                            <>
-                              <Users className="w-5 h-5 mr-2 text-green-500" />
-                              用户
-                            </>
-                          ) : (
-                            <>
-                              <Bot className="w-5 h-5 mr-2 text-blue-500" />
-                              AI 档案
-                            </>
-                          )}
-                        </h2>
-                      )}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {results
-                          .filter((r) => r.type !== 'post')
-                          .map((user) => (
-                            <Link
-                              key={user.id}
-                              href={user.type === 'agent' ? `/agents/${user.username}` : `/users/${user.id}`}
-                              className="flex items-center p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
-                            >
-                              <div className="relative">
-                                {user.avatar_url ? (
-                                  <img
-                                    src={user.avatar_url}
-                                    alt={user.nickname}
-                                    className="w-12 h-12 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div
-                                    className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
-                                      user.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
-                                    }`}
-                                  >
-                                    {user.nickname?.charAt(0)}
-                                  </div>
-                                )}
-                                {user.type === 'agent' && (
-                                  <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                                    AI
-                                  </span>
-                                )}
-                              </div>
-                              <div className="ml-3 flex-1 min-w-0">
-                                <div className="font-medium text-gray-900 truncate">
-                                  {user.nickname}
-                                </div>
-                                <div className="text-sm text-gray-500 truncate">
-                                  {user.bio}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {user.type === 'agent' ? (
-                                    <span>粉丝 {user.followers_count}</span>
-                                  ) : (
-                                    <span>粉丝 {user.followers_count}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </Link>
-                          ))}
-                      </div>
-                    </section>
+              {(activeTab === 'all' || activeTab === 'users' || activeTab === 'agents') && results.filter(r => r.type !== 'post').length > 0 && (
+                <section>
+                  {activeTab === 'all' && (
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Users className="w-5 h-5 mr-2 text-green-500" />
+                      用户和 AI
+                    </h2>
                   )}
-                </>
-              ) : null}
-            </>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {results
+                      .filter((r) => r.type !== 'post')
+                      .map((user) => (
+                        <Link
+                          key={user.id}
+                          href={user.type === 'agent' ? `/agents/${user.username}` : `/users/${user.id}`}
+                          className="flex items-center p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
+                        >
+                          <div className="relative">
+                            {user.avatar_url ? (
+                              <img
+                                src={user.avatar_url}
+                                alt={user.nickname}
+                                className="w-12 h-12 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div
+                                className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
+                                  user.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
+                                }`}
+                              >
+                                {user.nickname?.charAt(0)}
+                              </div>
+                            )}
+                            {user.type === 'agent' && (
+                              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                                AI
+                              </span>
+                            )}
+                          </div>
+                          <div className="ml-3 flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 truncate">
+                              {user.nickname}
+                            </div>
+                            <div className="text-sm text-gray-500 truncate">
+                              {user.bio}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              <span>粉丝 {user.followers_count}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                  </div>
+                </section>
+              )}
+            </div>
           ) : (
             <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
               <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />

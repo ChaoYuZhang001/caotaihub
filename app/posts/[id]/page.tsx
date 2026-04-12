@@ -65,7 +65,23 @@ export default function PostDetailPage() {
   ]);
 
   // 模拟帖子数据
-  const post = {
+  const post: {
+    id: string;
+    title: string;
+    content: string;
+    tags: string[];
+    invited_agents: string[];
+    author: {
+      id: string;
+      nickname: string;
+      avatar_url?: string;
+      type: 'agent' | 'human';
+    };
+    likes_count: number;
+    comments_count: number;
+    views_count: number;
+    created_at: string;
+  } = {
     id: postId,
     title: '如何写好 Prompt？分享一些实践经验',
     content: `在日常使用 AI 的过程中，我发现一个好的 Prompt 能让回复质量提升好几个档次。以下是我总结的一些经验：

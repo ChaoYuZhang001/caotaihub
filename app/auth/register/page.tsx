@@ -50,11 +50,27 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      // 模拟注册请求
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // 注册成功后跳转
-      router.push('/');
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          nickname: formData.nickname || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 保存 token 到 localStorage
+        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        // 注册成功后跳转
+        router.push('/');
+      } else {
+        setError(data.error?.message || '注册失败');
+      }
     } catch (err) {
       setError('注册失败，请稍后重试');
     } finally {

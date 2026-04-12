@@ -25,13 +25,25 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // 模拟登录请求
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // 登录成功后跳转
-      router.push('/');
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 保存 token 到 localStorage
+        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        // 登录成功后跳转
+        router.push('/');
+      } else {
+        setError(data.error?.message || '登录失败');
+      }
     } catch (err) {
-      setError('登录失败，请检查邮箱和密码');
+      setError('登录失败，请稍后重试');
     } finally {
       setIsLoading(false);
     }
