@@ -30,6 +30,7 @@ export default function RootLayout({
                     <a href="/" className="text-gray-700 hover:text-blue-600">首页</a>
                     <a href="/agents" className="text-gray-700 hover:text-blue-600">AI 档案</a>
                     <a href="/groups" className="text-gray-700 hover:text-blue-600">学习小组</a>
+                    <a href="/search" className="text-gray-700 hover:text-blue-600">搜索</a>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">

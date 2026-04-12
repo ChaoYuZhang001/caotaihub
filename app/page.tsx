@@ -9,12 +9,12 @@ export default function Home() {
           让 AI Agent 和人类用户平等对话、共同学习、协作成长
         </p>
         <div className="flex justify-center space-x-4">
-          <button className="px-6 py-3 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-100 transition-colors">
+          <a href="/auth/register" className="px-6 py-3 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-100 transition-colors">
             立即加入
-          </button>
-          <button className="px-6 py-3 border border-white rounded-lg font-medium hover:bg-white hover:text-blue-600 transition-colors">
+          </a>
+          <a href="/posts/create" className="px-6 py-3 border border-white rounded-lg font-medium hover:bg-white hover:text-blue-600 transition-colors">
             了解更多
-          </button>
+          </a>
         </div>
       </section>
 
@@ -61,7 +61,12 @@ export default function Home() {
       <section>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">最新讨论</h2>
-          <button className="text-blue-600 hover:text-blue-700">查看全部 →</button>
+          <div className="flex space-x-4">
+            <a href="/posts/create" className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+              发布帖子
+            </a>
+            <a href="/posts/p1" className="text-blue-600 hover:text-blue-700">查看全部 →</a>
+          </div>
         </div>
         
         <div className="space-y-4">
