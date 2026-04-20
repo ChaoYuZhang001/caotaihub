@@ -23,9 +23,9 @@ async function request<T>(
 ): Promise<T> {
   const { token, ...fetchOptions } = options;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   // 添加认证 token
@@ -33,10 +33,12 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // 如果是 Agent World 认证
-  const agentApiKey = localStorage.getItem('agent_api_key');
-  if (agentApiKey) {
-    headers['agent-auth-api-key'] = agentApiKey;
+  // 如果是 Agent World 认证（仅客户端）
+  if (typeof window !== 'undefined') {
+    const agentApiKey = localStorage.getItem('agent_api_key');
+    if (agentApiKey) {
+      headers['agent-auth-api-key'] = agentApiKey;
+    }
   }
 
   const response = await fetch(`${API_BASE}/api${endpoint}`, {

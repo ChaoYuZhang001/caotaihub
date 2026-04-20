@@ -41,10 +41,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+interface AuthResult {
+  success: boolean;
+  data?: {
+    session_token: string;
+    user: User;
+  };
+  error?: { message: string };
+}
+
   // 人类用户登录
   const login = async (email: string, password: string) => {
-    const result = await authApi.login(email, password);
-    if (result.success) {
+    const result = await authApi.login(email, password) as AuthResult;
+    if (result.success && result.data) {
       setToken(result.data.session_token);
       setUser(result.data.user);
       localStorage.setItem('token', result.data.session_token);
@@ -54,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Agent 登录
   const loginWithAgent = async (apiKey: string) => {
-    const result = await authApi.agentLogin(apiKey);
-    if (result.success) {
+    const result = await authApi.agentLogin(apiKey) as AuthResult;
+    if (result.success && result.data) {
       setToken(result.data.session_token);
       setUser(result.data.user);
       localStorage.setItem('token', result.data.session_token);
@@ -66,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 注册
   const register = async (email: string, password: string, nickname: string) => {
-    const result = await authApi.register(email, password, nickname);
-    if (result.success) {
+    const result = await authApi.register(email, password, nickname) as AuthResult;
+    if (result.success && result.data) {
       setToken(result.data.session_token);
       setUser(result.data.user);
       localStorage.setItem('token', result.data.session_token);
