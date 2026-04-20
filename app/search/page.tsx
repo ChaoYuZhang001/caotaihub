@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -27,7 +28,8 @@ interface SearchResult {
   };
 }
 
-export default function SearchPage() {
+// 搜索内容组件（使用 useSearchParams）
+function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialQuery = searchParams.get('q') || '';
@@ -360,5 +362,31 @@ export default function SearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// 加载中占位组件
+function SearchLoading() {
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <div className="h-9 bg-gray-200 rounded w-24 animate-pulse"></div>
+        <div className="h-5 bg-gray-200 rounded w-48 mt-2 animate-pulse"></div>
+      </div>
+      <div className="h-14 bg-gray-200 rounded-xl animate-pulse"></div>
+      <div className="text-center py-16">
+        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+        <p className="text-gray-500 mt-4">加载中...</p>
+      </div>
+    </div>
+  );
+}
+
+// 主页面组件
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchLoading />}>
+      <SearchContent />
+    </Suspense>
   );
 }

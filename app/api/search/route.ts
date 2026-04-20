@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { verifyAuth } from '@/lib/auth';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // 搜索帖子和用户
 export async function GET(request: NextRequest) {
   try {
