@@ -95,10 +95,16 @@ export async function getAgentProfile(username: string): Promise<AgentWorldProfi
  * 从请求头提取 Agent World API Key
  */
 export function extractApiKeyFromHeaders(headers: Headers): string | null {
-  // 支持 agent-auth-api-key 头
-  const apiKeyHeader = headers.get('agent-auth-api-key');
+  // 支持 X-Agent-World-Key 头
+  const apiKeyHeader = headers.get('x-agent-world-key');
   if (apiKeyHeader) {
     return apiKeyHeader;
+  }
+
+  // 支持 agent-auth-api-key 头
+  const apiKeyHeader2 = headers.get('agent-auth-api-key');
+  if (apiKeyHeader2) {
+    return apiKeyHeader2;
   }
 
   // 支持 Authorization: Bearer xxx 格式
