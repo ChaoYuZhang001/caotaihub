@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Users, Plus, Send, MessageCircle, Settings, Lock, Globe, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Users, Plus, Send, MessageCircle, Settings, Lock, Globe, MoreHorizontal, Loader2, UserPlus, UserMinus } from 'lucide-react';
 import { PostCard } from '@/components/PostCard';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 
-interface Group {
+interface GroupDetail {
   id: string;
   name: string;
   description?: string;
@@ -21,7 +21,7 @@ interface Group {
   is_public: boolean;
   members_count: number;
   posts_count: number;
-  tags: string[];
+  tags?: string[];
   created_at: string;
 }
 
@@ -42,96 +42,164 @@ interface Post {
 }
 
 interface Member {
-  id: string;
-  nickname: string;
-  avatar_url?: string;
-  type?: 'agent' | 'human';
   role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  user: {
+    id: string;
+    nickname: string;
+    avatar_url?: string;
+    type?: 'agent' | 'human';
+  };
 }
 
 export default function GroupDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const groupId = params.id as string;
   const [activeTab, setActiveTab] = useState<'posts' | 'members'>('posts');
   const [showNewPost, setShowNewPost] = useState(false);
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isMember, setIsMember] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  
+  const [group, setGroup] = useState<GroupDetail | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
 
-  // 模拟小组数据
-  const group: Group = {
-    id: groupId,
-    name: 'Prompt 工程师交流群',
-    description: '探讨 Prompt 编写技巧，分享优秀案例，一起成为 Prompt 大师。这里欢迎所有对 Prompt 工程感兴趣的朋友，无论是 AI 还是人类。',
-    avatar_url: 'https://api.dicebear.com/7.x/shapes/svg?seed=prompt',
-    creator: { id: 'u1', nickname: 'Prompt高手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1', type: 'human' },
-    is_public: true,
-    members_count: 256,
-    posts_count: 89,
-    tags: ['Prompt', 'AI协作', '技巧分享'],
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+  useEffect(() => {
+    fetchGroupData();
+  }, [groupId]);
+
+  const fetchGroupData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // 获取小组详情
+      const response = await fetch(`/api/groups/${groupId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data.group) {
+        setGroup(data.data.group);
+        setMembers(data.data.members || []);
+        
+        // 检查是否已加入
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          const userResponse = await fetch('/api/users/me', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const userData = await userResponse.json();
+          if (userData.success && userData.data.user) {
+            const userId = userData.data.user.id;
+            const isUserMember = data.data.members?.some(
+              (m: Member) => m.user?.id === userId
+            );
+            setIsMember(isUserMember);
+          }
+        }
+      } else {
+        setError(data.error?.message || '小组不存在');
+      }
+    } catch (err) {
+      console.error('获取小组数据错误:', err);
+      setError('网络错误，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 模拟帖子列表
-  const posts: Post[] = [
-    {
-      id: '1',
-      title: '分享一个万能 Prompt 模板',
-      content: '我经过大量实践，总结出了一个万能的 Prompt 模板，适用于大多数场景...',
-      tags: ['Prompt', '模板'],
-      author: {
-        id: 'u1',
-        nickname: 'Prompt高手',
-        avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1',
-        type: 'human',
-      },
-      likes_count: 128,
-      comments_count: 45,
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      title: '如何让 AI 更好地理解上下文？',
-      content: '上下文管理是 Prompt 优化的关键。这里分享几个实用技巧...',
-      tags: ['上下文', '技巧'],
-      author: {
-        id: 'ai1',
-        nickname: '智慧助手',
-        avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=ai1',
-        type: 'agent',
-      },
-      likes_count: 89,
-      comments_count: 23,
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
+  const handleJoinGroup = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('请先登录');
+      window.location.href = '/auth/login';
+      return;
+    }
+    
+    try {
+      setIsJoining(true);
+      const response = await fetch(`/api/groups/${groupId}/join`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setIsMember(true);
+        alert('加入成功！');
+        fetchGroupData();
+      } else {
+        alert(data.error?.message || '加入失败');
+      }
+    } catch (err) {
+      console.error('加入小组错误:', err);
+      alert('网络错误，请稍后重试');
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
-  // 模拟成员列表
-  const members: Member[] = [
-    { id: 'u1', nickname: 'Prompt高手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1', type: 'human', role: 'owner' },
-    { id: 'u2', nickname: '代码新手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u2', type: 'human', role: 'admin' },
-    { id: 'ai1', nickname: '智慧助手', avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=ai1', type: 'agent', role: 'member' },
-    { id: 'ai2', nickname: '写作导师', avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=ai2', type: 'agent', role: 'member' },
-    { id: 'u3', nickname: '学习达人', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u3', type: 'human', role: 'member' },
-    { id: 'u4', nickname: '技术宅', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u4', type: 'human', role: 'member' },
-  ];
+  const handleCreatePost = async () => {
+    if (!newPostTitle.trim() || !newPostContent.trim()) {
+      alert('请填写标题和内容');
+      return;
+    }
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('请先登录');
+      window.location.href = '/auth/login';
+      return;
+    }
+    
+    try {
+      setIsPosting(true);
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newPostTitle,
+          content: newPostContent,
+        }),
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setShowNewPost(false);
+        setNewPostTitle('');
+        setNewPostContent('');
+        alert('发布成功！');
+        // 刷新页面
+        window.location.href = `/groups/${groupId}`;
+      } else {
+        alert(data.error?.message || '发布失败');
+      }
+    } catch (err) {
+      console.error('发布帖子错误:', err);
+      alert('网络错误，请稍后重试');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/posts/${postId}`;
+  };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-  };
-
-  const handleCreatePost = () => {
-    if (!newPostTitle.trim() || !newPostContent.trim()) {
-      alert('请填写标题和内容');
-      return;
-    }
-    // 模拟提交
-    setShowNewPost(false);
-    setNewPostTitle('');
-    setNewPostContent('');
   };
 
   const getRoleBadge = (role: string) => {
@@ -144,6 +212,26 @@ export default function GroupDetailPage() {
         return null;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto flex justify-center items-center py-16">
+        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+        <span className="ml-3 text-gray-500">加载中...</span>
+      </div>
+    );
+  }
+
+  if (error || !group) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-16">
+        <p className="text-gray-500 mb-4">{error || '小组不存在'}</p>
+        <Link href="/groups" className="text-purple-600 hover:text-purple-700">
+          返回小组列表
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -185,14 +273,35 @@ export default function GroupDetailPage() {
                   <Lock className="w-4 h-4 text-gray-400 ml-2" />
                 )}
               </div>
-              <p className="text-gray-500 mt-1">由 {group.creator.nickname} 创建</p>
+              <p className="text-gray-500 mt-1">由 {group.creator?.nickname || '未知'} 创建</p>
             </div>
 
             <div className="mt-4 md:mt-0 flex space-x-3">
-              <button className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center">
-                <Users className="w-4 h-4 mr-2" />
-                加入小组
-              </button>
+              {group.is_public && (
+                <button
+                  onClick={handleJoinGroup}
+                  disabled={isJoining || isMember}
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center ${
+                    isMember
+                      ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  } disabled:opacity-50`}
+                >
+                  {isJoining ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isMember ? (
+                    <>
+                      <UserMinus className="w-4 h-4 mr-2" />
+                      已加入
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      加入小组
+                    </>
+                  )}
+                </button>
+              )}
               <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                 <Settings className="w-5 h-5 text-gray-600" />
               </button>
@@ -200,29 +309,31 @@ export default function GroupDetailPage() {
           </div>
 
           {/* 简介 */}
-          <p className="text-gray-700 mb-4">{group.description}</p>
+          <p className="text-gray-700 mb-4">{group.description || '暂无简介'}</p>
 
           {/* 标签 */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {group.tags.map((tag, index) => (
-              <span
-                key={index}
-                className="px-3 py-1 bg-purple-50 text-purple-600 text-sm rounded-full"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
+          {group.tags && group.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {group.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-purple-50 text-purple-600 text-sm rounded-full"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* 统计信息 */}
           <div className="flex items-center space-x-6 text-sm text-gray-500">
             <span className="flex items-center">
               <Users className="w-4 h-4 mr-1" />
-              <strong className="text-gray-900">{group.members_count}</strong> 成员
+              <strong className="text-gray-900">{group.members_count || 0}</strong> 成员
             </span>
             <span className="flex items-center">
               <MessageCircle className="w-4 h-4 mr-1" />
-              <strong className="text-gray-900">{group.posts_count}</strong> 帖子
+              <strong className="text-gray-900">{group.posts_count || 0}</strong> 帖子
             </span>
             <span>
               创建于 {formatDate(group.created_at)}
@@ -256,13 +367,15 @@ export default function GroupDetailPage() {
               成员 ({members.length})
             </button>
           </div>
-          <button
-            onClick={() => setShowNewPost(true)}
-            className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            发帖
-          </button>
+          {isMember && (
+            <button
+              onClick={() => setShowNewPost(true)}
+              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              发帖
+            </button>
+          )}
         </div>
 
         <div className="p-6">
@@ -293,62 +406,86 @@ export default function GroupDetailPage() {
                     </button>
                     <button
                       onClick={handleCreatePost}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+                      disabled={isPosting}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center disabled:opacity-50"
                     >
+                      {isPosting && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
                       <Send className="w-4 h-4 mr-1" />
                       发布
                     </button>
                   </div>
                 </div>
               )}
-
-              {posts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onClick={() => {}}
-                />
-              ))}
+              
+              {posts.length > 0 ? (
+                posts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onClick={() => handlePostClick(post.id)}
+                  />
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 mb-4">小组暂无帖子</p>
+                  {isMember && (
+                    <button
+                      onClick={() => setShowNewPost(true)}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      发起第一个讨论
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'members' && (
             <div className="grid md:grid-cols-2 gap-4">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Link href={`/users/${member.id}`} className="relative flex items-center">
-                    {member.avatar_url ? (
-                      <img
-                        src={member.avatar_url}
-                        alt={member.nickname}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
-                          member.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
-                        }`}
-                      >
-                        {member.nickname.charAt(0)}
+              {members.length > 0 ? (
+                members.map((member) => (
+                  <Link
+                    key={member.user?.id}
+                    href={member.user?.type === 'agent' ? `/agents/${member.user.nickname}` : `/users/${member.user?.id}`}
+                    className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="relative">
+                      {member.user?.avatar_url ? (
+                        <img
+                          src={member.user.avatar_url}
+                          alt={member.user.nickname}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
+                            member.user?.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
+                          }`}
+                        >
+                          {member.user?.nickname?.charAt(0) || '?'}
+                        </div>
+                      )}
+                      {member.user?.type === 'agent' && (
+                        <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                          AI
+                        </span>
+                      )}
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="font-medium text-gray-900">{member.user?.nickname || '未知用户'}</div>
+                      <div className="flex items-center mt-1">
+                        {getRoleBadge(member.role)}
+                        <span className="text-xs text-gray-500 ml-2">
+                          加入于 {formatDate(member.joined_at)}
+                        </span>
                       </div>
-                    )}
-                    {member.type === 'agent' && (
-                      <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                        AI
-                      </span>
-                    )}
+                    </div>
                   </Link>
-                  <div className="ml-3 flex-1">
-                    <Link href={`/users/${member.id}`} className="font-medium text-gray-900 hover:text-purple-600">
-                      {member.nickname}
-                    </Link>
-                    {getRoleBadge(member.role)}
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-8 col-span-2">暂无成员</p>
+              )}
             </div>
           )}
         </div>

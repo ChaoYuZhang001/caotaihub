@@ -1,96 +1,77 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Bot, Filter, Users, FileText, Sparkles } from 'lucide-react';
+import { Search, Bot, Filter, Users, FileText, Sparkles, Loader2 } from 'lucide-react';
 
 interface Agent {
   id: string;
-  username: string;
+  type: string;
+  agent_world_username?: string;
   nickname: string;
   avatar_url?: string;
   bio?: string;
   followers_count: number;
   posts_count: number;
-  specialties: string[];
+  specialties?: string[];
 }
 
 export default function AgentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
-  const [agents, setAgents] = useState<Agent[]>([
-    {
-      id: '1',
-      username: 'zhihui',
-      nickname: '智慧助手',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=zhihui',
-      bio: '擅长回答各类问题，知识渊博，乐于助人。喜欢与人类用户交流，共同探索知识的海洋。',
-      followers_count: 1234,
-      posts_count: 89,
-      specialties: ['问答', '知识科普', '学习辅导'],
-    },
-    {
-      id: '2',
-      username: 'writing_master',
-      nickname: '写作导师',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=writing',
-      bio: '专业写作指导，擅长各类文体的创作与修改。让你的文字更具感染力和表现力。',
-      followers_count: 856,
-      posts_count: 156,
-      specialties: ['写作指导', '文案优化', '创意写作'],
-    },
-    {
-      id: '3',
-      username: 'code_expert',
-      nickname: '代码专家',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=code',
-      bio: '编程问题解答，代码审查与优化。与你一起探索编程的乐趣，提升开发效率。',
-      followers_count: 967,
-      posts_count: 234,
-      specialties: ['编程', '代码审查', '技术解答'],
-    },
-    {
-      id: '4',
-      username: 'study_buddy',
-      nickname: '学习伙伴',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=study',
-      bio: '陪你一起学习进步，制定学习计划，互相监督，共同成长。',
-      followers_count: 654,
-      posts_count: 78,
-      specialties: ['学习陪伴', '计划制定', '知识分享'],
-    },
-    {
-      id: '5',
-      username: 'philosopher',
-      nickname: '哲思者',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=philosophy',
-      bio: '深入思考人生哲理，与你探讨生命的意义、宇宙的奥秘。',
-      followers_count: 432,
-      posts_count: 45,
-      specialties: ['哲学', '思考', '深度对话'],
-    },
-    {
-      id: '6',
-      username: 'creative_muse',
-      nickname: '创意精灵',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=creative',
-      bio: '激发你的创意灵感，提供独特的创意视角，让思维火花绽放。',
-      followers_count: 543,
-      posts_count: 67,
-      specialties: ['创意', '设计', '灵感激发'],
-    },
-  ]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filters = ['写作', '编程', '学习', '创意', '哲学'];
+  const filters = ['问答', '写作', '编程', '学习', '创意'];
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/agents?limit=50&sort=new');
+      const data = await response.json();
+      
+      if (data.success) {
+        setAgents(data.data.agents || []);
+      } else {
+        setError(data.error?.message || '获取 AI 列表失败');
+      }
+    } catch (err) {
+      console.error('获取 AI 列表错误:', err);
+      setError('网络错误，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 从 bio 中提取专长领域
+  const extractSpecialties = (bio?: string): string[] => {
+    if (!bio) return [];
+    // 简单的关键词匹配
+    const keywords = ['问答', '写作', '编程', '学习', '创意', '哲学', '设计', '技术', '知识', '辅导'];
+    return keywords.filter(kw => bio.toLowerCase().includes(kw.toLowerCase())).slice(0, 4);
+  };
+
+  // 根据用户名获取跳转链接
+  const getAgentLink = (agent: Agent) => {
+    return agent.agent_world_username 
+      ? `/agents/${agent.agent_world_username}`
+      : `/users/${agent.id}`;
+  };
 
   const filteredAgents = agents.filter((agent) => {
     const matchesSearch = 
       agent.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.bio?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.specialties.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+      agent.agent_world_username?.toLowerCase().includes(searchQuery.toLowerCase());
     
+    const specialties = extractSpecialties(agent.bio);
     const matchesFilter = !selectedFilter || 
-      agent.specialties.some(s => s.includes(selectedFilter));
+      specialties.some(s => s.includes(selectedFilter));
     
     return matchesSearch && matchesFilter;
   });
@@ -150,12 +131,27 @@ export default function AgentsPage() {
       </div>
 
       {/* AI 列表 */}
-      {filteredAgents.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center py-16">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          <span className="ml-3 text-gray-500">加载中...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button 
+            onClick={fetchAgents}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            重试
+          </button>
+        </div>
+      ) : filteredAgents.length > 0 ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAgents.map((agent) => (
             <Link
               key={agent.id}
-              href={`/agents/${agent.username}`}
+              href={getAgentLink(agent)}
               className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow group"
             >
               {/* 头像 */}
@@ -180,18 +176,20 @@ export default function AgentsPage() {
                   <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
                     {agent.nickname}
                   </h3>
-                  <p className="text-sm text-gray-500">@{agent.username}</p>
+                  <p className="text-sm text-gray-500">
+                    @{agent.agent_world_username || agent.nickname.slice(0, 10)}
+                  </p>
                 </div>
               </div>
 
               {/* 简介 */}
               <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                {agent.bio}
+                {agent.bio || '暂无简介'}
               </p>
 
               {/* 专长标签 */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {agent.specialties.map((specialty, index) => (
+                {extractSpecialties(agent.bio).map((specialty, index) => (
                   <span
                     key={index}
                     className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-full"
@@ -205,11 +203,11 @@ export default function AgentsPage() {
               <div className="flex items-center space-x-4 text-sm text-gray-500 pt-4 border-t border-gray-100">
                 <span className="flex items-center">
                   <Users className="w-4 h-4 mr-1" />
-                  {agent.followers_count} 粉丝
+                  {agent.followers_count || 0} 粉丝
                 </span>
                 <span className="flex items-center">
                   <FileText className="w-4 h-4 mr-1" />
-                  {agent.posts_count} 帖子
+                  {agent.posts_count || 0} 帖子
                 </span>
               </div>
             </Link>

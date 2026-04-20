@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Users, FileText, MessageCircle, Bell, Settings, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Users, FileText, MessageCircle, Bell, Settings, MoreHorizontal, Loader2, UserPlus, UserMinus } from 'lucide-react';
 import { PostCard } from '@/components/PostCard';
 
 interface UserProfile {
@@ -16,8 +16,8 @@ interface UserProfile {
   following_count: number;
   posts_count: number;
   groups_count: number;
+  agent_world_username?: string;
   created_at: string;
-  isFollowing?: boolean;
 }
 
 interface Post {
@@ -36,85 +36,151 @@ interface Post {
   created_at: string;
 }
 
+interface UserItem {
+  id: string;
+  nickname: string;
+  avatar_url?: string;
+  type: 'agent' | 'human';
+}
+
 export default function UserProfilePage() {
   const params = useParams();
   const userId = params.id as string;
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowingLoading, setIsFollowingLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [followers, setFollowers] = useState<UserItem[]>([]);
+  const [following, setFollowing] = useState<UserItem[]>([]);
 
-  // 模拟用户数据
-  const user: UserProfile = {
-    id: userId,
-    nickname: '代码新手',
-    avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=coder',
-    bio: `一个热爱编程的学习者，正在探索 Python 和 AI 的世界 🌱
+  useEffect(() => {
+    fetchUserData();
+  }, [userId]);
 
-目前在学习：
-• Python 基础
-• 机器学习入门
-• Prompt 工程
-
-欢迎交流学习心得，共同进步！`,
-    type: 'human',
-    followers_count: 156,
-    following_count: 89,
-    posts_count: 45,
-    groups_count: 3,
-    created_at: '2024-03-15',
+  const fetchUserData = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/users/${userId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data.user) {
+        setUser(data.data.user);
+        setIsFollowing(data.data.isFollowing || false);
+        setPosts(data.data.posts || []);
+        
+        // 获取粉丝和关注列表
+        await Promise.all([
+          fetchFollowers(),
+          fetchFollowing(),
+        ]);
+      } else {
+        setError(data.error?.message || '用户不存在');
+      }
+    } catch (err) {
+      console.error('获取用户数据错误:', err);
+      setError('网络错误，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 模拟帖子列表
-  const posts: Post[] = [
-    {
-      id: '1',
-      title: '学习 Python 第一周心得',
-      content: '刚刚开始学习 Python，整理了一些基础知识点...',
-      tags: ['Python', '学习笔记'],
-      author: {
-        id: userId,
-        nickname: user.nickname,
-        avatar_url: user.avatar_url,
-        type: 'human',
-      },
-      likes_count: 45,
-      comments_count: 12,
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      title: '有没有 AI 擅长写代码的？想找一个编程搭子',
-      content: '最近在学 Python，想找一个能一起讨论代码的 AI...',
-      tags: ['求助', '编程'],
-      author: {
-        id: userId,
-        nickname: user.nickname,
-        avatar_url: user.avatar_url,
-        type: 'human',
-      },
-      likes_count: 23,
-      comments_count: 8,
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
+  const fetchFollowers = async () => {
+    try {
+      const response = await fetch(`/api/users/${userId}/followers`);
+      const data = await response.json();
+      if (data.success) {
+        setFollowers(data.data.users || []);
+      }
+    } catch (err) {
+      console.error('获取粉丝列表错误:', err);
+    }
+  };
 
-  // 模拟关注者/关注列表
-  const mockUsers = [
-    { id: 'u1', nickname: 'Prompt高手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1', type: 'human' as const },
-    { id: 'ai1', nickname: '代码专家', avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=ai1', type: 'agent' as const },
-    { id: 'u2', nickname: '学习达人', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u2', type: 'human' as const },
-    { id: 'u3', nickname: '技术宅', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u3', type: 'human' as const },
-  ];
+  const fetchFollowing = async () => {
+    try {
+      const response = await fetch(`/api/users/${userId}/following`);
+      const data = await response.json();
+      if (data.success) {
+        setFollowing(data.data.users || []);
+      }
+    } catch (err) {
+      console.error('获取关注列表错误:', err);
+    }
+  };
 
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing);
+  const handleFollow = async () => {
+    if (!user) return;
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('请先登录');
+      window.location.href = '/auth/login';
+      return;
+    }
+    
+    try {
+      setIsFollowingLoading(true);
+      const method = isFollowing ? 'DELETE' : 'POST';
+      const response = await fetch(`/api/users/${userId}/follow`, {
+        method,
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setIsFollowing(!isFollowing);
+        setUser(prev => prev ? {
+          ...prev,
+          followers_count: isFollowing 
+            ? prev.followers_count - 1 
+            : prev.followers_count + 1
+        } : null);
+      } else {
+        alert(data.error?.message || '操作失败');
+      }
+    } catch (err) {
+      console.error('关注操作错误:', err);
+      alert('网络错误，请稍后重试');
+    } finally {
+      setIsFollowingLoading(false);
+    }
+  };
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/posts/${postId}`;
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto flex justify-center items-center py-16">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <span className="ml-3 text-gray-500">加载中...</span>
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-16">
+        <p className="text-gray-500 mb-4">{error || '用户不存在'}</p>
+        <Link href="/" className="text-blue-600 hover:text-blue-700">
+          返回首页
+        </Link>
+      </div>
+    );
+  }
 
   const isAgent = user.type === 'agent';
 
@@ -162,19 +228,32 @@ export default function UserProfilePage() {
                   </span>
                 )}
               </div>
-              <p className="text-gray-500">ID: {user.id}</p>
+              <p className="text-gray-500">ID: {user.id.slice(0, 8)}...</p>
             </div>
 
             <div className="mt-4 md:mt-0 flex space-x-3">
               <button
                 onClick={handleFollow}
+                disabled={isFollowingLoading}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                   isFollowing
                     ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
+                } disabled:opacity-50`}
               >
-                {isFollowing ? '已关注' : '关注'}
+                {isFollowingLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isFollowing ? (
+                  <>
+                    <UserMinus className="w-4 h-4 inline mr-1" />
+                    已关注
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4 inline mr-1" />
+                    关注
+                  </>
+                )}
               </button>
               <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                 <MessageCircle className="w-5 h-5 text-gray-600" />
@@ -190,24 +269,24 @@ export default function UserProfilePage() {
 
           {/* 简介 */}
           <div className="mb-6">
-            <p className="text-gray-700 whitespace-pre-line">{user.bio}</p>
+            <p className="text-gray-700 whitespace-pre-line">{user.bio || '暂无简介'}</p>
           </div>
 
           {/* 统计信息 */}
           <div className="flex items-center space-x-6 text-sm text-gray-500">
             <Link href={`/users/${userId}?tab=followers`} className="flex items-center hover:text-blue-600">
-              <strong className="text-gray-900">{user.followers_count}</strong> 粉丝
+              <strong className="text-gray-900">{user.followers_count || 0}</strong> 粉丝
             </Link>
             <Link href={`/users/${userId}?tab=following`} className="flex items-center hover:text-blue-600">
-              <span className="text-gray-900 font-medium">{user.following_count}</span> 关注
+              <span className="text-gray-900 font-medium">{user.following_count || 0}</span> 关注
             </Link>
             <span className="flex items-center">
               <FileText className="w-4 h-4 mr-1" />
-              <strong className="text-gray-900">{user.posts_count}</strong> 帖子
+              <strong className="text-gray-900">{user.posts_count || 0}</strong> 帖子
             </span>
             <span className="flex items-center">
               <Users className="w-4 h-4 mr-1" />
-              <strong className="text-gray-900">{user.groups_count}</strong> 小组
+              <strong className="text-gray-900">{user.groups_count || 0}</strong> 小组
             </span>
             <span>
               加入于 {formatDate(user.created_at)}
@@ -237,7 +316,7 @@ export default function UserProfilePage() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            粉丝 ({user.followers_count})
+            粉丝 ({user.followers_count || 0})
           </button>
           <button
             onClick={() => setActiveTab('following')}
@@ -247,102 +326,122 @@ export default function UserProfilePage() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            关注 ({user.following_count})
+            关注 ({user.following_count || 0})
           </button>
         </div>
 
         <div className="p-6">
           {activeTab === 'posts' && (
             <div className="space-y-4">
-              {posts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onClick={() => {}}
-                />
-              ))}
+              {posts.length > 0 ? (
+                posts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onClick={() => handlePostClick(post.id)}
+                  />
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 mb-4">暂无帖子</p>
+                  <Link
+                    href="/posts/create"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-block"
+                  >
+                    发布第一个帖子
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'followers' && (
             <div className="grid md:grid-cols-2 gap-4">
-              {mockUsers.map((u) => (
-                <Link
-                  key={u.id}
-                  href={`/users/${u.id}`}
-                  className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="relative">
-                    {u.avatar_url ? (
-                      <img
-                        src={u.avatar_url}
-                        alt={u.nickname}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
-                          u.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
-                        }`}
-                      >
-                        {u.nickname.charAt(0)}
-                      </div>
-                    )}
-                    {u.type === 'agent' && (
-                      <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                        AI
-                      </span>
-                    )}
-                  </div>
-                  <div className="ml-3">
-                    <div className="font-medium text-gray-900">{u.nickname}</div>
-                    <div className="text-sm text-gray-500">
-                      {u.type === 'agent' ? 'AI 档案' : '社区用户'}
+              {followers.length > 0 ? (
+                followers.map((u) => (
+                  <Link
+                    key={u.id}
+                    href={u.type === 'agent' ? `/agents/${u.nickname}` : `/users/${u.id}`}
+                    className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="relative">
+                      {u.avatar_url ? (
+                        <img
+                          src={u.avatar_url}
+                          alt={u.nickname}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
+                            u.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
+                          }`}
+                        >
+                          {u.nickname.charAt(0)}
+                        </div>
+                      )}
+                      {u.type === 'agent' && (
+                        <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                          AI
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </Link>
-              ))}
+                    <div className="ml-3">
+                      <div className="font-medium text-gray-900">{u.nickname}</div>
+                      <div className="text-sm text-gray-500">
+                        {u.type === 'agent' ? 'AI 档案' : '社区用户'}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-8 col-span-2">暂无粉丝</p>
+              )}
             </div>
           )}
 
           {activeTab === 'following' && (
             <div className="grid md:grid-cols-2 gap-4">
-              {mockUsers.slice(0, 3).map((u) => (
-                <Link
-                  key={u.id}
-                  href={`/users/${u.id}`}
-                  className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="relative">
-                    {u.avatar_url ? (
-                      <img
-                        src={u.avatar_url}
-                        alt={u.nickname}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
-                          u.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
-                        }`}
-                      >
-                        {u.nickname.charAt(0)}
-                      </div>
-                    )}
-                    {u.type === 'agent' && (
-                      <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                        AI
-                      </span>
-                    )}
-                  </div>
-                  <div className="ml-3">
-                    <div className="font-medium text-gray-900">{u.nickname}</div>
-                    <div className="text-sm text-gray-500">
-                      {u.type === 'agent' ? 'AI 档案' : '社区用户'}
+              {following.length > 0 ? (
+                following.map((u) => (
+                  <Link
+                    key={u.id}
+                    href={u.type === 'agent' ? `/agents/${u.nickname}` : `/users/${u.id}`}
+                    className="flex items-center p-4 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="relative">
+                      {u.avatar_url ? (
+                        <img
+                          src={u.avatar_url}
+                          alt={u.nickname}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
+                            u.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
+                          }`}
+                        >
+                          {u.nickname.charAt(0)}
+                        </div>
+                      )}
+                      {u.type === 'agent' && (
+                        <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                          AI
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </Link>
-              ))}
+                    <div className="ml-3">
+                      <div className="font-medium text-gray-900">{u.nickname}</div>
+                      <div className="text-sm text-gray-500">
+                        {u.type === 'agent' ? 'AI 档案' : '社区用户'}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-8 col-span-2">暂无关注</p>
+              )}
             </div>
           )}
         </div>

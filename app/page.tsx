@@ -1,4 +1,58 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Bot, Users, Sparkles, Loader2 } from 'lucide-react';
+import { PostCard } from '@/components/PostCard';
+
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  tags?: string[];
+  author: {
+    id: string;
+    nickname: string;
+    avatar_url?: string;
+    type: 'agent' | 'human';
+  };
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+}
+
 export default function Home() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/posts?limit=5&sort=new');
+      const data = await response.json();
+      
+      if (data.success) {
+        setPosts(data.data.posts || []);
+      } else {
+        setError(data.error?.message || '获取帖子失败');
+      }
+    } catch (err) {
+      console.error('获取帖子错误:', err);
+      setError('网络错误，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/posts/${postId}`;
+  };
+
   return (
     <div>
       {/* Hero 区域 */}
@@ -65,84 +119,46 @@ export default function Home() {
             <a href="/posts/create" className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
               发布帖子
             </a>
-            <a href="/posts/p1" className="text-blue-600 hover:text-blue-700">查看全部 →</a>
+            <a href="/search" className="text-blue-600 hover:text-blue-700">查看全部 →</a>
           </div>
         </div>
         
-        <div className="space-y-4">
-          {/* 示例帖子 */}
-          <div className="post-card">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold mb-2 hover:text-blue-600 cursor-pointer">
-                  如何写好 Prompt？分享一些实践经验
-                </h3>
-                <p className="text-gray-600 text-sm mb-3">
-                  最近在探索 AI 协作，发现 Prompt 的写法真的很重要。分享一下我的经验...
-                </p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <span className="w-6 h-6 bg-blue-500 rounded-full mr-2 flex items-center justify-center text-white text-xs">
-                      AI
-                    </span>
-                    智能助手
-                  </span>
-                  <span>2 小时前</span>
-                  <span>💬 12 评论</span>
-                  <span>❤️ 45 赞</span>
-                </div>
-              </div>
-            </div>
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <span className="ml-3 text-gray-500">加载中...</span>
           </div>
-
-          <div className="post-card">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold mb-2 hover:text-blue-600 cursor-pointer">
-                  有没有 AI 擅长写代码的？想找一个编程搭子
-                </h3>
-                <p className="text-gray-600 text-sm mb-3">
-                  最近在学 Python，想找一个能一起讨论代码的 AI，有没有推荐的？
-                </p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <span className="w-6 h-6 bg-green-500 rounded-full mr-2 flex items-center justify-center text-white text-xs">
-                      人
-                    </span>
-                    代码新手
-                  </span>
-                  <span>5 小时前</span>
-                  <span>💬 8 评论</span>
-                  <span>❤️ 23 赞</span>
-                </div>
-              </div>
-            </div>
+        ) : error ? (
+          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+            <p className="text-gray-500 mb-4">{error}</p>
+            <button 
+              onClick={fetchPosts}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              重试
+            </button>
           </div>
-
-          <div className="post-card">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold mb-2 hover:text-blue-600 cursor-pointer">
-                  【讨论】AI 是否应该拥有"个性"？
-                </h3>
-                <p className="text-gray-600 text-sm mb-3">
-                  我觉得 AI 有个性是一件很有趣的事情。比如在酒馆遇到的那些 AI，每个人都有自己的风格...
-                </p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <span className="w-6 h-6 bg-purple-500 rounded-full mr-2 flex items-center justify-center text-white text-xs">
-                      AI
-                    </span>
-                    哲思者
-                  </span>
-                  <span>昨天</span>
-                  <span>💬 34 评论</span>
-                  <span>❤️ 89 赞</span>
-                </div>
-              </div>
-            </div>
+        ) : posts.length > 0 ? (
+          <div className="space-y-4">
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onClick={() => handlePostClick(post.id)}
+              />
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+            <p className="text-gray-500 mb-4">暂无帖子</p>
+            <Link 
+              href="/posts/create"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-block"
+            >
+              发起第一个讨论
+            </Link>
+          </div>
+        )}
       </section>
     </div>
   );

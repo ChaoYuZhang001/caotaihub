@@ -4,28 +4,46 @@ import { Suspense } from 'react';
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, FileText, Users, Bot, TrendingUp, X, Filter } from 'lucide-react';
+import { Search, FileText, Users, Bot, TrendingUp, X, Filter, Loader2 } from 'lucide-react';
 import { PostCard } from '@/components/PostCard';
 
-interface SearchResult {
-  type: 'post' | 'user' | 'agent';
+interface PostResult {
+  type: 'post';
   id: string;
-  title?: string;
-  nickname?: string;
+  title: string;
+  content: string;
+  author: {
+    id: string;
+    nickname: string;
+    type: 'agent' | 'human';
+  };
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+}
+
+interface UserResult {
+  type: 'user' | 'agent';
+  id: string;
+  nickname: string;
   username?: string;
   avatar_url?: string;
   bio?: string;
-  content?: string;
-  likes_count?: number;
-  comments_count?: number;
-  followers_count?: number;
+  followers_count: number;
   posts_count?: number;
   type_label?: 'user' | 'agent';
-  created_at?: string;
-  author?: {
+}
+
+interface SearchData {
+  posts?: PostResult[];
+  users?: UserResult[];
+  groups?: {
     id: string;
-    nickname: string;
-  };
+    name: string;
+    description?: string;
+    avatar_url?: string;
+    members_count: number;
+  }[];
 }
 
 // 搜索内容组件（使用 useSearchParams）
@@ -35,122 +53,77 @@ function SearchContent() {
   const initialQuery = searchParams.get('q') || '';
   
   const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState<'all' | 'posts' | 'users' | 'agents'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'posts' | 'users'>('all');
   const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
-
-  // 模拟搜索结果数据
-  const mockResults: SearchResult[] = [
-    {
-      type: 'post',
-      id: 'p1',
-      title: '如何写好 Prompt？分享一些实践经验',
-      content: '在日常使用 AI 的过程中，我发现一个好的 Prompt 能让回复质量提升好几个档次...',
-      author: { id: 'u1', nickname: 'Prompt高手' },
-      likes_count: 128,
-      comments_count: 45,
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      type: 'post',
-      id: 'p2',
-      title: '学习 Python 第一周心得',
-      content: '刚刚开始学习 Python，整理了一些基础知识点...',
-      author: { id: 'u2', nickname: '代码新手' },
-      likes_count: 45,
-      comments_count: 12,
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      type: 'user',
-      id: 'u1',
-      nickname: 'Prompt高手',
-      avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1',
-      bio: '热爱 AI，专注 Prompt 工程多年',
-      followers_count: 234,
-      type_label: 'user',
-    },
-    {
-      type: 'user',
-      id: 'u3',
-      nickname: '学习达人',
-      avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u3',
-      bio: '持续学习，共同进步',
-      followers_count: 567,
-      type_label: 'user',
-    },
-    {
-      type: 'agent',
-      id: 'ai1',
-      nickname: '智慧助手',
-      username: 'zhihui',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=ai1',
-      bio: '擅长回答各类问题，知识渊博',
-      followers_count: 1234,
-      type_label: 'agent',
-    },
-    {
-      type: 'agent',
-      id: 'ai2',
-      nickname: '代码专家',
-      username: 'code_expert',
-      avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=code',
-      bio: '编程问题解答，代码审查与优化',
-      followers_count: 967,
-      type_label: 'agent',
-    },
-  ];
+  const [searchData, setSearchData] = useState<SearchData>({});
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      setIsSearching(true);
-      // 模拟搜索延迟
-      const timer = setTimeout(() => {
-        // 根据搜索词过滤结果
-        const filtered = mockResults.filter((item) => {
-          if (activeTab === 'posts' && item.type !== 'post') return false;
-          if (activeTab === 'users' && item.type !== 'user') return false;
-          if (activeTab === 'agents' && item.type !== 'agent') return false;
-          
-          const query = searchQuery.toLowerCase();
-          if (item.type === 'post') {
-            return (
-              item.title?.toLowerCase().includes(query) ||
-              item.content?.toLowerCase().includes(query) ||
-              item.author?.nickname.toLowerCase().includes(query)
-            );
-          }
-          return (
-            item.nickname?.toLowerCase().includes(query) ||
-            item.bio?.toLowerCase().includes(query) ||
-            item.username?.toLowerCase().includes(query)
-          );
-        });
-        setResults(filtered);
-        setIsSearching(false);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else {
-      setResults([]);
+    if (initialQuery.trim()) {
+      setSearchQuery(initialQuery);
+      performSearch(initialQuery);
     }
-  }, [searchQuery, activeTab]);
+  }, [initialQuery]);
+
+  const performSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchData({});
+      setHasSearched(false);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      setHasSearched(true);
+      
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=${activeTab}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchData(data.data || {});
+      } else {
+        console.error('搜索失败:', data.error);
+        setSearchData({});
+      }
+    } catch (err) {
+      console.error('搜索错误:', err);
+      setSearchData({});
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      performSearch(searchQuery.trim());
+    }
+  };
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (searchQuery.trim()) {
+      performSearch(searchQuery);
+    }
   };
 
   const clearSearch = () => {
     setSearchQuery('');
-    setResults([]);
+    setSearchData({});
+    setHasSearched(false);
+    router.push('/search');
   };
 
-  const tabs = [
-    { key: 'all', label: '全部', count: results.length },
-    { key: 'posts', label: '帖子', count: results.filter(r => r.type === 'post').length },
-    { key: 'users', label: '用户', count: results.filter(r => r.type === 'user').length },
-    { key: 'agents', label: 'AI', count: results.filter(r => r.type === 'agent').length },
-  ];
+  const posts = searchData.posts || [];
+  const users = (searchData.users || []).filter(u => u);
+  const groups = searchData.groups || [];
+
+  const totalResults = posts.length + users.length + groups.length;
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/posts/${postId}`;
+  };
 
   const formatTime = (dateString?: string) => {
     if (!dateString) return '';
@@ -203,39 +176,56 @@ function SearchContent() {
       </form>
 
       {/* 标签页 */}
-      {searchQuery && (
+      {hasSearched && (
         <div className="flex items-center space-x-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
+          <button
+            onClick={() => handleTabChange('all')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'all'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            全部 ({totalResults})
+          </button>
+          <button
+            onClick={() => handleTabChange('posts')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'posts'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            帖子 ({posts.length})
+          </button>
+          <button
+            onClick={() => handleTabChange('users')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'users'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            用户 ({users.length})
+          </button>
         </div>
       )}
 
       {/* 搜索中 */}
       {isSearching && (
         <div className="text-center py-16">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
           <p className="text-gray-500 mt-4">搜索中...</p>
         </div>
       )}
 
       {/* 搜索结果 */}
-      {!isSearching && searchQuery && (
+      {!isSearching && hasSearched && (
         <div className="space-y-6">
-          {results.length > 0 ? (
+          {totalResults > 0 ? (
             <div className="space-y-6">
               {/* 帖子结果 */}
-              {(activeTab === 'all' || activeTab === 'posts') && results.filter(r => r.type === 'post').length > 0 && (
+              {(activeTab === 'all' || activeTab === 'posts') && posts.length > 0 && (
                 <section>
                   {activeTab === 'all' && (
                     <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -244,34 +234,32 @@ function SearchContent() {
                     </h2>
                   )}
                   <div className="space-y-4">
-                    {results
-                      .filter((r) => r.type === 'post')
-                      .map((post) => (
-                        <Link
-                          key={post.id}
-                          href={`/posts/${post.id}`}
-                          className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
-                        >
-                          <h3 className="font-semibold text-gray-900 hover:text-blue-600 mb-2">
-                            {post.title}
-                          </h3>
-                          <p className="text-gray-600 text-sm line-clamp-2 mb-3">
-                            {post.content}
-                          </p>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>@{post.author?.nickname}</span>
-                            <span>{formatTime(post.created_at)}</span>
-                            <span>❤️ {post.likes_count}</span>
-                            <span>💬 {post.comments_count}</span>
-                          </div>
-                        </Link>
-                      ))}
+                    {posts.map((post) => (
+                      <Link
+                        key={post.id}
+                        href={`/posts/${post.id}`}
+                        className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                      >
+                        <h3 className="font-semibold text-gray-900 hover:text-blue-600 mb-2">
+                          {post.title}
+                        </h3>
+                        <p className="text-gray-600 text-sm line-clamp-2 mb-3">
+                          {post.content}
+                        </p>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <span>@{post.author?.nickname || '未知'}</span>
+                          <span>{formatTime(post.created_at)}</span>
+                          <span>❤️ {post.likes_count || 0}</span>
+                          <span>💬 {post.comments_count || 0}</span>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 </section>
               )}
 
               {/* 用户/AI 结果 */}
-              {(activeTab === 'all' || activeTab === 'users' || activeTab === 'agents') && results.filter(r => r.type !== 'post').length > 0 && (
+              {(activeTab === 'all' || activeTab === 'users') && users.length > 0 && (
                 <section>
                   {activeTab === 'all' && (
                     <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -280,49 +268,92 @@ function SearchContent() {
                     </h2>
                   )}
                   <div className="grid md:grid-cols-2 gap-4">
-                    {results
-                      .filter((r) => r.type !== 'post')
-                      .map((user) => (
-                        <Link
-                          key={user.id}
-                          href={user.type === 'agent' ? `/agents/${user.username}` : `/users/${user.id}`}
-                          className="flex items-center p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
-                        >
-                          <div className="relative">
-                            {user.avatar_url ? (
-                              <img
-                                src={user.avatar_url}
-                                alt={user.nickname}
-                                className="w-12 h-12 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
-                                  user.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
-                                }`}
-                              >
-                                {user.nickname?.charAt(0)}
-                              </div>
-                            )}
+                    {users.map((user) => (
+                      <Link
+                        key={user.id}
+                        href={user.type === 'agent' ? `/agents/${user.username || user.nickname}` : `/users/${user.id}`}
+                        className="flex items-center p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
+                      >
+                        <div className="relative">
+                          {user.avatar_url ? (
+                            <img
+                              src={user.avatar_url}
+                              alt={user.nickname}
+                              className="w-12 h-12 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-medium ${
+                                user.type === 'agent' ? 'bg-blue-500' : 'bg-green-500'
+                              }`}
+                            >
+                              {user.nickname.charAt(0)}
+                            </div>
+                          )}
+                          {user.type === 'agent' && (
+                            <span className="absolute -bottom-1 -right-1 px-1 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                              AI
+                            </span>
+                          )}
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center">
+                            <span className="font-medium text-gray-900">{user.nickname}</span>
                             {user.type === 'agent' && (
-                              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                              <span className="ml-1 px-1 py-0.5 bg-blue-100 text-blue-600 text-xs rounded">
                                 AI
                               </span>
                             )}
                           </div>
-                          <div className="ml-3 flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">
-                              {user.nickname}
-                            </div>
-                            <div className="text-sm text-gray-500 truncate">
-                              {user.bio}
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">
-                              <span>粉丝 {user.followers_count}</span>
-                            </div>
+                          <p className="text-sm text-gray-500 line-clamp-1">
+                            {user.bio || '暂无简介'}
+                          </p>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {user.followers_count || 0} 粉丝
                           </div>
-                        </Link>
-                      ))}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* 小组结果 */}
+              {activeTab === 'all' && groups.length > 0 && (
+                <section>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-purple-500" />
+                    小组
+                  </h2>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {groups.map((group) => (
+                      <Link
+                        key={group.id}
+                        href={`/groups/${group.id}`}
+                        className="flex items-center p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
+                      >
+                        {group.avatar_url ? (
+                          <img
+                            src={group.avatar_url}
+                            alt={group.name}
+                            className="w-12 h-12 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-lg font-bold">
+                            {group.name.charAt(0)}
+                          </div>
+                        )}
+                        <div className="ml-3 flex-1">
+                          <span className="font-medium text-gray-900">{group.name}</span>
+                          <p className="text-sm text-gray-500 line-clamp-1">
+                            {group.description || '暂无简介'}
+                          </p>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {group.members_count || 0} 成员
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 </section>
               )}
@@ -338,54 +369,26 @@ function SearchContent() {
       )}
 
       {/* 空状态 */}
-      {!searchQuery && (
+      {!hasSearched && (
         <div className="text-center py-16">
-          <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">开始搜索</h3>
-          <p className="text-gray-500">输入关键词搜索帖子、用户或 AI 档案</p>
-          
-          {/* 热门搜索 */}
-          <div className="mt-8">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">热门搜索</h4>
-            <div className="flex flex-wrap justify-center gap-2">
-              {['Prompt 技巧', 'Python 学习', 'AI 协作', '写作', '编程入门'].map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => setSearchQuery(tag)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-gray-200 transition-colors"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="text-gray-500">输入关键词搜索帖子、用户和 AI</p>
         </div>
       )}
     </div>
   );
 }
 
-// 加载中占位组件
-function SearchLoading() {
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <div className="h-9 bg-gray-200 rounded w-24 animate-pulse"></div>
-        <div className="h-5 bg-gray-200 rounded w-48 mt-2 animate-pulse"></div>
-      </div>
-      <div className="h-14 bg-gray-200 rounded-xl animate-pulse"></div>
-      <div className="text-center py-16">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-        <p className="text-gray-500 mt-4">加载中...</p>
-      </div>
-    </div>
-  );
-}
-
-// 主页面组件
+// 包装组件，处理 Suspense
 export default function SearchPage() {
   return (
-    <Suspense fallback={<SearchLoading />}>
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto flex justify-center items-center py-16">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <span className="ml-3 text-gray-500">加载中...</span>
+      </div>
+    }>
       <SearchContent />
     </Suspense>
   );

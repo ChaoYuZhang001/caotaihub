@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Users, Plus, Search, Filter, Lock, Globe } from 'lucide-react';
+import { Users, Plus, Search, Filter, Lock, Globe, Loader2, UserPlus } from 'lucide-react';
 
 interface Group {
   id: string;
@@ -17,93 +17,122 @@ interface Group {
   is_public: boolean;
   members_count: number;
   posts_count: number;
-  tags: string[];
+  tags?: string[];
   created_at: string;
 }
 
 export default function GroupsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [newGroup, setNewGroup] = useState({
     name: '',
     description: '',
     is_public: true,
-    tags: [] as string[],
   });
-  const [groups, setGroups] = useState<Group[]>([
-    {
-      id: '1',
-      name: 'Prompt 工程师交流群',
-      description: '探讨 Prompt 编写技巧，分享优秀案例，一起成为 Prompt 大师',
-      avatar_url: 'https://api.dicebear.com/7.x/shapes/svg?seed=prompt',
-      creator: { id: 'u1', nickname: 'Prompt高手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u1' },
-      is_public: true,
-      members_count: 256,
-      posts_count: 89,
-      tags: ['Prompt', 'AI协作'],
-      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      name: 'Python 学习小组',
-      description: '从零开始学 Python，互相监督，共同进步',
-      avatar_url: 'https://api.dicebear.com/7.x/shapes/svg?seed=python',
-      creator: { id: 'u2', nickname: '代码新手', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u2' },
-      is_public: true,
-      members_count: 189,
-      posts_count: 156,
-      tags: ['Python', '编程'],
-      created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '3',
-      name: 'AI 创业分享群',
-      description: '分享 AI 创业经验，资源对接，项目合作（仅限邀请）',
-      creator: { id: 'u3', nickname: '创业者', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u3' },
-      is_public: false,
-      members_count: 45,
-      posts_count: 23,
-      tags: ['创业', 'AI'],
-      created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '4',
-      name: '读书会',
-      description: '每月读一本书，分享读书心得，互相推荐好书',
-      avatar_url: 'https://api.dicebear.com/7.x/shapes/svg?seed=book',
-      creator: { id: 'u4', nickname: '书虫', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=u4' },
-      is_public: true,
-      members_count: 312,
-      posts_count: 234,
-      tags: ['读书', '成长'],
-      created_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ]);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const filteredGroups = groups.filter((group) =>
-    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  useEffect(() => {
+    fetchGroups();
+  }, []);
 
-  const handleCreateGroup = () => {
+  const fetchGroups = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/groups?limit=50&sort=new');
+      const data = await response.json();
+      
+      if (data.success) {
+        setGroups(data.data.groups || []);
+      } else {
+        setError(data.error?.message || '获取小组列表失败');
+      }
+    } catch (err) {
+      console.error('获取小组列表错误:', err);
+      setError('网络错误，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateGroup = async () => {
     if (!newGroup.name.trim()) {
       alert('请输入小组名称');
       return;
     }
-    const group = {
-      id: Date.now().toString(),
-      ...newGroup,
-      avatar_url: `https://api.dicebear.com/7.x/shapes/svg?seed=${Date.now()}`,
-      creator: { id: 'currentUser', nickname: '当前用户' },
-      members_count: 1,
-      posts_count: 0,
-      created_at: new Date().toISOString(),
-    };
-    setGroups([group, ...groups]);
-    setShowCreateModal(false);
-    setNewGroup({ name: '', description: '', is_public: true, tags: [] });
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('请先登录');
+      window.location.href = '/auth/login';
+      return;
+    }
+    
+    try {
+      setIsCreating(true);
+      const response = await fetch('/api/groups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(newGroup),
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        // 添加新小组到列表
+        setGroups([data.data.group, ...groups]);
+        setShowCreateModal(false);
+        setNewGroup({ name: '', description: '', is_public: true });
+        alert('小组创建成功！');
+      } else {
+        alert(data.error?.message || '创建失败');
+      }
+    } catch (err) {
+      console.error('创建小组错误:', err);
+      alert('网络错误，请稍后重试');
+    } finally {
+      setIsCreating(false);
+    }
   };
+
+  const handleJoinGroup = async (groupId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('请先登录');
+      window.location.href = '/auth/login';
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/groups/${groupId}/join`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('加入成功！');
+        fetchGroups(); // 刷新列表
+      } else {
+        alert(data.error?.message || '加入失败');
+      }
+    } catch (err) {
+      console.error('加入小组错误:', err);
+      alert('网络错误，请稍后重试');
+    }
+  };
+
+  const filteredGroups = groups.filter((group) =>
+    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    group.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div>
@@ -142,7 +171,22 @@ export default function GroupsPage() {
       </div>
 
       {/* 小组列表 */}
-      {filteredGroups.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center py-16">
+          <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+          <span className="ml-3 text-gray-500">加载中...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button 
+            onClick={fetchGroups}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            重试
+          </button>
+        </div>
+      ) : filteredGroups.length > 0 ? (
         <div className="grid md:grid-cols-2 gap-6">
           {filteredGroups.map((group) => (
             <Link
@@ -177,34 +221,48 @@ export default function GroupsPage() {
                       )}
                     </div>
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                      {group.description}
+                      {group.description || '暂无简介'}
                     </p>
                   </div>
                 </div>
 
                 {/* 标签 */}
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {group.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-purple-50 text-purple-600 text-xs rounded-full"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
+                {group.tags && group.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {group.tags.slice(0, 3).map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 bg-purple-50 text-purple-600 text-xs rounded-full"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* 统计信息 */}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                   <div className="flex items-center text-sm text-gray-500">
                     <Users className="w-4 h-4 mr-1" />
-                    {group.members_count} 成员
+                    {group.members_count || 0} 成员
                   </div>
                   <div className="flex items-center text-sm text-gray-500">
                     <span className="text-gray-400">创建者：</span>
-                    <span className="text-gray-700">{group.creator.nickname}</span>
+                    <span className="text-gray-700">{group.creator?.nickname || '未知'}</span>
                   </div>
                 </div>
+                
+                {group.is_public && (
+                  <div className="mt-3">
+                    <button
+                      onClick={(e) => handleJoinGroup(group.id, e)}
+                      className="w-full px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center"
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      加入小组
+                    </button>
+                  </div>
+                )}
               </div>
             </Link>
           ))}
@@ -288,8 +346,10 @@ export default function GroupsPage() {
               </button>
               <button
                 onClick={handleCreateGroup}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                disabled={isCreating}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center"
               >
+                {isCreating && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 创建
               </button>
             </div>

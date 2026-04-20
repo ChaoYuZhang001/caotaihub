@@ -1,11 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Send, Sparkles, X, Eye } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, X, Eye, Loader2 } from 'lucide-react';
 import { TagInput } from '@/components/TagInput';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
+
+interface Agent {
+  id: string;
+  nickname: string;
+  bio?: string;
+  avatar_url?: string;
+  agent_world_username?: string;
+}
 
 export default function CreatePostPage() {
   const router = useRouter();
@@ -13,36 +21,82 @@ export default function CreatePostPage() {
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [invitedAgents, setInvitedAgents] = useState<string[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(true);
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [error, setError] = useState('');
 
-  // 模拟可邀请的 AI 列表
-  const availableAgents = [
-    { id: 'ai1', nickname: '智慧助手', bio: '擅长回答各类问题' },
-    { id: 'ai2', nickname: '写作导师', bio: '专业写作指导' },
-    { id: 'ai3', nickname: '代码专家', bio: '编程问题解答' },
-    { id: 'ai4', nickname: '学习伙伴', bio: '陪你一起学习进步' },
-  ];
+  // 获取可邀请的 AI 列表
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch('/api/agents?limit=20');
+      const data = await response.json();
+      
+      if (data.success) {
+        setAvailableAgents(data.data.agents || []);
+      }
+    } catch (err) {
+      console.error('获取 AI 列表失败:', err);
+    } finally {
+      setLoadingAgents(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!title.trim() || !content.trim()) {
-      alert('请填写标题和内容');
+      setError('请填写标题和内容');
       return;
     }
 
+    // 检查登录状态
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    
+    if (!token || !userStr) {
+      setError('请先登录');
+      router.push('/auth/login');
+      return;
+    }
+
+    const user = JSON.parse(userStr);
+    
     setIsSubmitting(true);
+    setError('');
     
     try {
-      // 模拟提交
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          content,
+          tags,
+          invited_agents: invitedAgents,
+          author_id: user.id,
+        }),
+      });
+
+      const data = await response.json();
       
-      // 提交成功后跳转
-      router.push('/');
+      if (data.success) {
+        router.push(`/posts/${data.data.post.id}`);
+      } else {
+        setError(data.error?.message || '发布失败');
+      }
     } catch (error) {
       console.error('提交失败:', error);
+      setError('网络错误，请稍后重试');
     } finally {
       setIsSubmitting(false);
     }
@@ -68,6 +122,12 @@ export default function CreatePostPage() {
           <h1 className="text-2xl font-bold text-gray-900">发布新帖</h1>
           <p className="text-gray-500 mt-1">分享你的想法，邀请 AI 参与讨论</p>
         </div>
+
+        {error && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* 标题 */}
@@ -166,49 +226,63 @@ export default function CreatePostPage() {
             {showAgentSelector && (
               <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-sm text-gray-500 mb-3">选择想要邀请的 AI：</p>
-                <div className="space-y-2">
-                  {availableAgents.map((agent) => {
-                    const isSelected = invitedAgents.includes(agent.id);
-                    return (
-                      <div
-                        key={agent.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            removeInvitedAgent(agent.id);
-                          } else {
-                            setInvitedAgents([...invitedAgents, agent.id]);
-                          }
-                        }}
-                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                          isSelected
-                            ? 'bg-purple-50 border border-purple-200'
-                            : 'bg-white hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
-                            AI
+                
+                {loadingAgents ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-500">加载 AI 列表...</span>
+                  </div>
+                ) : availableAgents.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">暂无可邀请的 AI</p>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {availableAgents.map((agent) => {
+                      const isSelected = invitedAgents.includes(agent.id);
+                      return (
+                        <div
+                          key={agent.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              removeInvitedAgent(agent.id);
+                            } else {
+                              setInvitedAgents([...invitedAgents, agent.id]);
+                            }
+                          }}
+                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-purple-50 border border-purple-200'
+                              : 'bg-white hover:bg-gray-100'
+                          }`}
+                        >
+                          <div className="flex items-center">
+                            {agent.avatar_url ? (
+                              <img src={agent.avatar_url} alt={agent.nickname} className="w-10 h-10 rounded-full" />
+                            ) : (
+                              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+                                AI
+                              </div>
+                            )}
+                            <div className="ml-3">
+                              <div className="font-medium text-gray-900">{agent.nickname}</div>
+                              <div className="text-sm text-gray-500">{agent.bio || '暂无简介'}</div>
+                            </div>
                           </div>
-                          <div className="ml-3">
-                            <div className="font-medium text-gray-900">{agent.nickname}</div>
-                            <div className="text-sm text-gray-500">{agent.bio}</div>
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            isSelected
+                              ? 'bg-purple-500 border-purple-500'
+                              : 'border-gray-300'
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
                           </div>
                         </div>
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                          isSelected
-                            ? 'bg-purple-500 border-purple-500'
-                            : 'border-gray-300'
-                        }`}>
-                          {isSelected && (
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -242,10 +316,7 @@ export default function CreatePostPage() {
               >
                 {isSubmitting ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     发布中...
                   </>
                 ) : (
