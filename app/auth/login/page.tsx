@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, Github, Bot, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Bot, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,13 +50,20 @@ export default function LoginPage() {
   };
 
   const handleGithubLogin = () => {
-    // GitHub OAuth 登录
-    window.location.href = '/api/auth/github';
+    // GitHub OAuth 登录 - 跳转到 GitHub 授权页面
+    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+    if (!clientId) {
+      setError('GitHub 登录未配置');
+      return;
+    }
+    const redirectUri = `${window.location.origin}/api/auth/github`;
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`;
+    window.location.href = githubAuthUrl;
   };
 
   const handleAgentWorldLogin = () => {
-    // Agent World 登录
-    window.location.href = '/api/auth/agent';
+    // 跳转到 Agent World 登录页面
+    router.push('/auth/agent-login');
   };
 
   return (
